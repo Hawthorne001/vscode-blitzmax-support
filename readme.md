@@ -67,7 +67,7 @@ Any other server will work too, as long as it speaks LSP.\
 Point `blitzmax.lsp.path` at it and put anything it needs on the command line in `blitzmax.lsp.args`.
 
 The server reads your project the way a build would, so it needs to know which build you mean.\
-`blitzmax.lsp.buildMode` picks debug or release, `blitzmax.lsp.targetPlatform` and `blitzmax.lsp.targetArchitecture` pick the target, and leaving those two empty means the machine you are sitting at.\
+By default it follows the debug mode, platform and architecture of the default BlitzMax build task. `blitzmax.lsp.buildMode`, `blitzmax.lsp.targetPlatform` and `blitzmax.lsp.targetArchitecture` can override those values when needed.\
 The rest of the `blitzmax.lsp` settings are described in the settings editor.
 
 If different workspace folders use different BlitzMax SDKs, enable `blitzmax.lsp.multi`. Each folder can then override `blitzmax.base.path` and `blitzmax.lsp.path` in its own `.vscode/settings.json`; folders without overrides continue to use your user-level defaults.

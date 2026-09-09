@@ -6,7 +6,7 @@ import * as vscode from 'vscode'
 import { existsSync } from './common'
 import * as lsp from 'vscode-languageclient/node'
 import { workspaceOrGlobalConfigBoolean, workspaceOrGlobalConfigArray, workspaceOrGlobalConfigString } from './common'
-import { lockedBuildSourcePath } from './taskprovider'
+import { getBuildDefinitionFromWorkspace, lockedBuildSourcePath } from './taskprovider'
 let multiInstance: boolean | undefined
 let forcedStop: boolean
 let outputChannel: vscode.LogOutputChannel
@@ -101,18 +101,19 @@ interface BmxLspSettings {
 function lspSettingsFor( workspace: vscode.WorkspaceFolder | undefined ): BmxLspSettings {
 
 	const settings: BmxLspSettings = { rootSourcePath: lockedBuildSourcePath( workspace ) }
+	const buildDefinition = getBuildDefinitionFromWorkspace( workspace )
 
 	const sdkPath = workspaceOrGlobalConfigString( workspace, 'blitzmax.base.path' )
 	if ( sdkPath ) settings.sdkPath = sdkPath
 
 	const buildMode = workspaceOrGlobalConfigString( workspace, 'blitzmax.lsp.buildMode' )
-	if ( buildMode ) settings.buildMode = buildMode
+	settings.buildMode = buildMode || ( buildDefinition.debug ? 'debug' : 'release' )
 
 	const targetPlatform = workspaceOrGlobalConfigString( workspace, 'blitzmax.lsp.targetPlatform' )
-	if ( targetPlatform ) settings.targetPlatform = targetPlatform
+	settings.targetPlatform = targetPlatform || buildDefinition.target
 
 	const targetArchitecture = workspaceOrGlobalConfigString( workspace, 'blitzmax.lsp.targetArchitecture' )
-	if ( targetArchitecture ) settings.targetArchitecture = targetArchitecture
+	settings.targetArchitecture = targetArchitecture || ( buildDefinition.target == 'pico' ? 'arm' : buildDefinition.architecture )
 
 	// Sending this replaces the server's whole set rather than adding to it, so an
 	// empty array has to mean "leave the target's own symbols alone"

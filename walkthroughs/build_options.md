@@ -15,6 +15,17 @@ Hover your mouse over an item to display more information.
 * _The build options view is displaying your default build task in `.vscode/tasks.json`.\
 Read more in the "Building & Tasks" step._
 
+# Raspberry Pi Pico
+
+Select **Raspberry Pi Pico** under **Platform** to reveal the Pico-specific
+options. The extension selects the required ARM architecture and console
+application mode automatically.
+
+The Pico section controls the Pico SDK board definition, managed heap size and
+memory region, persistent flash storage, floating-point ABI, and optional upload
+through picotool. These are project build settings; SDK and tool locations
+remain configured in the developer's BlitzMax and Pico environment.
+
 # Locking the build file
 
 The **Build File** at the top of the view controls which `.bmx` file is used by

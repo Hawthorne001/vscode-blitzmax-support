@@ -50,6 +50,12 @@ export interface BmxBuildOptions {
 	nopie?: boolean
 	upx?: boolean
 	conditionals?: string[]
+	picoBoard?: string
+	picoHeap?: string
+	picoHeapRegion?: string
+	picoStorage?: string
+	picoFloatAbi?: string
+	picoUpload?: boolean
 	bmkargs?: string[]
 	appargs?: string[]
 }
@@ -241,6 +247,10 @@ export class BmxBuildTaskProvider implements vscode.TaskProvider {
 		this.tasks.push( makeSimpleTask( 'Shared Library', 'Build a shared library', 'library' ) )
 		this.tasks.push( makeSimpleTask( 'GUI', 'Build a GUI application', 'application', 'gui' ) )
 		this.tasks.push( makeSimpleTask( 'Console', 'Build a console application', 'application', 'console' ) )
+		const picoDefinition = makeTaskDefinition( 'Pico', 'Build a Raspberry Pi Pico application', 'application', 'console' )
+		picoDefinition.target = 'pico'
+		picoDefinition.architecture = 'arm'
+		this.tasks.push( makeTask( picoDefinition ) )
 
 		return this.tasks
 	}
@@ -333,8 +343,14 @@ export function makeTask( definition: BmxBuildTaskDefinition ): vscode.Task {
 			bmkPath = vscode.Uri.file( bmxPath + '/bin/bmk' )
 		}
 
+		const isPico = resolvedDefinition.target == 'pico'
+
+		// Pico currently builds applications only. Treat this as an effective build
+		// constraint without rewriting a hand-authored task on disk.
+		const make = isPico ? 'application' : resolvedDefinition.make
+
 		// Process args
-		switch ( resolvedDefinition.make ) {
+		switch ( make ) {
 			case 'module':
 				args.push( 'makemods' )
 				break
@@ -345,7 +361,7 @@ export function makeTask( definition: BmxBuildTaskDefinition ): vscode.Task {
 				args.push( 'makebootstrap' )
 				break
 			default:
-				if ( !resolvedDefinition.legacy && resolvedDefinition.onlycompile ) {
+				if ( !isPico && !resolvedDefinition.legacy && resolvedDefinition.onlycompile ) {
 					args.push( 'compile' )
 				} else {
 					args.push( 'makeapp' )
@@ -366,7 +382,7 @@ export function makeTask( definition: BmxBuildTaskDefinition ): vscode.Task {
 
 		if ( resolvedDefinition.fullcompile ) args.push( '-a' )
 
-		if ( !resolvedDefinition.legacy ) {
+		if ( !resolvedDefinition.legacy || isPico ) {
 			// NG specific flags
 			if ( resolvedDefinition.verbose ) args.push( '-v' )
 
@@ -380,41 +396,54 @@ export function makeTask( definition: BmxBuildTaskDefinition ): vscode.Task {
 
 			if ( resolvedDefinition.target ) args.push( '-l', resolvedDefinition.target )
 
-			if ( resolvedDefinition.architecture ) args.push( '-g', resolvedDefinition.architecture )
+			if ( isPico ) {
+				args.push( '-g', 'arm' )
+			} else if ( resolvedDefinition.architecture ) {
+				args.push( '-g', resolvedDefinition.architecture )
+			}
 
-			if ( resolvedDefinition.appstub ) args.push( '-b', resolvedDefinition.appstub )
+			if ( !isPico && resolvedDefinition.appstub ) args.push( '-b', resolvedDefinition.appstub )
 
 			if ( resolvedDefinition.gdb ) args.push( '-gdb' )
 
-			if ( resolvedDefinition.gprof ) args.push( '-gprof' )
+			if ( !isPico && resolvedDefinition.gprof ) args.push( '-gprof' )
 
-			if ( resolvedDefinition.universal ) args.push( '-i' )
+			if ( !isPico && resolvedDefinition.universal ) args.push( '-i' )
 
-			if ( resolvedDefinition.musl ) args.push( '-musl' )
+			if ( !isPico && resolvedDefinition.musl ) args.push( '-musl' )
 
 			if ( resolvedDefinition.nostrictupgrade ) args.push( '-nostrictupgrade' )
 
 			if ( resolvedDefinition.quiet ) args.push( '-q' )
 
-			if ( resolvedDefinition.standalone ) args.push( '-standalone' )
+			if ( !isPico && resolvedDefinition.standalone ) args.push( '-standalone' )
 
-			if ( resolvedDefinition.static ) args.push( '-static' )
+			if ( !isPico && resolvedDefinition.static ) args.push( '-static' )
 
-			if ( resolvedDefinition.apptype == 'gui' && resolvedDefinition.hidpi ) args.push( '-hi' )
+			if ( !isPico && resolvedDefinition.apptype == 'gui' && resolvedDefinition.hidpi ) args.push( '-hi' )
 
 			if ( resolvedDefinition.framework ) args.push( '-f', resolvedDefinition.framework )
 
-			if ( resolvedDefinition.nomanifest ) args.push( '-nomanifest' )
+			if ( !isPico && resolvedDefinition.nomanifest ) args.push( '-nomanifest' )
 
 			if ( resolvedDefinition.single ) args.push( '-single' )
 
-			if ( resolvedDefinition.nodef ) args.push( '-nodef' )
+			if ( !isPico && resolvedDefinition.nodef ) args.push( '-nodef' )
 
-			if ( resolvedDefinition.nohead ) args.push( '-nohead' )
+			if ( !isPico && resolvedDefinition.nohead ) args.push( '-nohead' )
 
-			if ( resolvedDefinition.nopie ) args.push( '-no-pie' )
+			if ( !isPico && resolvedDefinition.nopie ) args.push( '-no-pie' )
 
-			if ( resolvedDefinition.upx ) args.push( '-upx' )
+			if ( !isPico && resolvedDefinition.upx ) args.push( '-upx' )
+
+			if ( isPico ) {
+				if ( resolvedDefinition.picoBoard ) args.push( '-board', resolvedDefinition.picoBoard )
+				if ( resolvedDefinition.picoHeap ) args.push( '-heap', resolvedDefinition.picoHeap )
+				if ( resolvedDefinition.picoHeapRegion ) args.push( '-heap-region', resolvedDefinition.picoHeapRegion )
+				if ( resolvedDefinition.picoStorage ) args.push( '-storage', resolvedDefinition.picoStorage )
+				if ( resolvedDefinition.picoFloatAbi ) args.push( '-float-abi', resolvedDefinition.picoFloatAbi )
+				if ( resolvedDefinition.picoUpload ) args.push( '-x' )
+			}
 
 			const conditionals = resolvedDefinition.conditionals
 			if ( conditionals ) {
@@ -423,15 +452,19 @@ export function makeTask( definition: BmxBuildTaskDefinition ): vscode.Task {
 			}
 		}
 
-		if ( resolvedDefinition.apptype ) args.push( '-t', resolvedDefinition.apptype )
+		if ( isPico ) {
+			args.push( '-t', 'console' )
+		} else if ( resolvedDefinition.apptype ) {
+			args.push( '-t', resolvedDefinition.apptype )
+		}
 
-		if ( resolvedDefinition.threaded ) args.push( '-h' )
+		if ( !isPico && resolvedDefinition.threaded ) args.push( '-h' )
 
 		if ( resolvedDefinition.bmkargs ) args = args.concat( resolvedDefinition.bmkargs )
 
 		// Figure out output
 		// Which will either be user defined, or <source>/<source>.debug
-		if ( resolvedDefinition.make == 'application' ) args.push( '-o', taskOutput( resolvedDefinition, workspace ) )
+		if ( make == 'application' ) args.push( '-o', taskOutput( resolvedDefinition, workspace ) )
 
 		args.push( resolvedDefinition.source )
 

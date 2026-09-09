@@ -325,16 +325,18 @@
 				},
 				"blitzmax.lsp.buildMode": {
 					"type": "string",
-					"default": "release",
+					"default": "",
 					"enum": [
+						"",
 						"release",
 						"debug"
 					],
 					"enumDescriptions": [
+						"Follow the default BlitzMax build task.",
 						"Read the project the way a release build sees it.",
 						"Read the project the way a debug build sees it, so `?Debug` code counts."
 					],
-					"markdownDescription": "Which build the language server reads your project as. It decides which module interfaces get loaded and which `?Debug` code is live.",
+					"markdownDescription": "Which build the language server reads your project as. Empty follows the default build task. It decides which module interfaces get loaded and which `?Debug` code is live.",
 					"scope": "resource"
 				},
 				"blitzmax.lsp.targetPlatform": {
@@ -348,11 +350,12 @@
 						"ios",
 						"android",
 						"raspberrypi",
+						"pico",
 						"emscripten",
 						"haiku",
 						"nx"
 					],
-					"markdownDescription": "The platform the language server reads your project for. Empty means the machine you are sitting at. Set it and that target's conditional symbols go live, so `?Win32` code gets checked while you work on Linux.",
+					"markdownDescription": "The platform the language server reads your project for. Empty follows the default BlitzMax build task. Set an override and that target's conditional symbols go live, so `?Win32` code gets checked while you work on Linux.",
 					"scope": "resource"
 				},
 				"blitzmax.lsp.targetArchitecture": {
@@ -373,7 +376,7 @@
 						"arm64v8a",
 						"js"
 					],
-					"markdownDescription": "The architecture the language server reads your project for. Empty means the machine you are sitting at. Not every architecture goes with every #blitzmax.lsp.targetPlatform#.",
+					"markdownDescription": "The architecture the language server reads your project for. Empty follows the default BlitzMax build task. Not every architecture goes with every #blitzmax.lsp.targetPlatform#.",
 					"scope": "resource"
 				},
 				"blitzmax.lsp.conditionalSymbols": {
@@ -835,9 +838,37 @@
 									"ios",
 									"android",
 									"raspberrypi",
+									"pico",
 									"nx"
 								],
 								"markdownDescription": "Cross-compiles to the specific target platform  \n`bmk -l <target-platform>`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)"
+							},
+							"picoBoard": {
+								"type": "string",
+								"markdownDescription": "Pico SDK board definition  \n`bmk -board <board>`"
+							},
+							"picoHeap": {
+								"type": "string",
+								"markdownDescription": "Pico managed heap size (`auto` or a sized value)  \n`bmk -heap <auto|size>`"
+							},
+							"picoHeapRegion": {
+								"type": "string",
+								"enum": ["sram", "psram"],
+								"markdownDescription": "Pico managed heap memory region  \n`bmk -heap-region <sram|psram>`"
+							},
+							"picoStorage": {
+								"type": "string",
+								"markdownDescription": "Reserved persistent Pico flash storage (`none` or a sector-aligned size)  \n`bmk -storage <none|size>`"
+							},
+							"picoFloatAbi": {
+								"type": "string",
+								"enum": ["auto", "hard"],
+								"markdownDescription": "Pico floating-point calling convention  \n`bmk -float-abi <auto|hard>`"
+							},
+							"picoUpload": {
+								"type": "boolean",
+								"default": false,
+								"markdownDescription": "Upload and start the Pico UF2 with picotool after building  \n`bmk -x`"
 							},
 							"musl": {
 								"type": "boolean",
@@ -1070,9 +1101,37 @@
 							"ios",
 							"android",
 							"raspberrypi",
+							"pico",
 							"nx"
 						],
 						"markdownDescription": "Cross-compiles to the specific target platform  \n`bmk -l <target-platform>`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)"
+					},
+					"picoBoard": {
+						"type": "string",
+						"markdownDescription": "Pico SDK board definition  \n`bmk -board <board>`"
+					},
+					"picoHeap": {
+						"type": "string",
+						"markdownDescription": "Pico managed heap size (`auto` or a sized value)  \n`bmk -heap <auto|size>`"
+					},
+					"picoHeapRegion": {
+						"type": "string",
+						"enum": ["sram", "psram"],
+						"markdownDescription": "Pico managed heap memory region  \n`bmk -heap-region <sram|psram>`"
+					},
+					"picoStorage": {
+						"type": "string",
+						"markdownDescription": "Reserved persistent Pico flash storage (`none` or a sector-aligned size)  \n`bmk -storage <none|size>`"
+					},
+					"picoFloatAbi": {
+						"type": "string",
+						"enum": ["auto", "hard"],
+						"markdownDescription": "Pico floating-point calling convention  \n`bmk -float-abi <auto|hard>`"
+					},
+					"picoUpload": {
+						"type": "boolean",
+						"default": false,
+						"markdownDescription": "Upload and start the Pico UF2 with picotool after building  \n`bmk -x`"
 					},
 					"musl": {
 						"type": "boolean",

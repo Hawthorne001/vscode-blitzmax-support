@@ -35,6 +35,12 @@ export function registerDebugger( context: vscode.ExtensionContext ) {
 			{ noDebug: false } )
 	} ) )
 	context.subscriptions.push( vscode.commands.registerCommand( 'blitzmax.buildAndRun', () => {
+		const definition = getBuildDefinitionFromWorkspace( undefined )
+		if ( definition.target == 'pico' ) {
+			const uploadDefinition = Object.assign( {}, definition, { debug: false, picoUpload: true } )
+			vscode.tasks.executeTask( makeTask( uploadDefinition ) )
+			return
+		}
 		vscode.debug.startDebugging( undefined,
 			<vscode.DebugConfiguration>( provider.resolveDebugConfiguration( undefined, undefined ) ),
 			{ noDebug: true } )
@@ -75,6 +81,13 @@ export class BmxDebugConfigurationProvider implements vscode.DebugConfigurationP
 			return vscode.window.showInformationMessage( 'Cannot find source file to debug' ).then( _ => {
 				return undefined	// abort launch
 			} )
+		}
+
+		const effectiveTarget = config.target || getBuildDefinitionFromWorkspace( workspace ).target
+		if ( effectiveTarget == 'pico' ) {
+			return vscode.window.showInformationMessage(
+				'Pico debugging uses GDB and OpenOCD rather than the BlitzMax desktop debugger. Select your Pico GDB launch configuration to debug the generated ELF.'
+			).then( _ => undefined )
 		}
 
 		config.workspace = workspace
