@@ -240,26 +240,43 @@ export class BmxBuildTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 		buildFile.iconPath = new vscode.ThemeIcon( buildFileLocked ? 'lock' : 'unlock' )
 		vscode.commands.executeCommand( 'setContext', 'blitzmax:buildFileLocked', buildFileLocked )
 
+		const picoTarget = def.target == 'pico'
 		this.buildCategories = [
 			// No category root items
 			buildFile,
 
 			{ id: 'build', label: 'Build Options', collapsibleState: vscode.TreeItemCollapsibleState.Expanded },
-			{ id: 'app', label: 'App Options', collapsibleState: vscode.TreeItemCollapsibleState.Expanded },
-			{ id: 'plat', label: 'Platform', collapsibleState: vscode.TreeItemCollapsibleState.Collapsed },
-			{ id: 'arch', label: 'Architecture', collapsibleState: vscode.TreeItemCollapsibleState.Collapsed },
-			{ id: 'misc', label: 'Misc Options', collapsibleState: vscode.TreeItemCollapsibleState.Collapsed },
-			{ id: 'stub', label: 'App Stub', collapsibleState: vscode.TreeItemCollapsibleState.Collapsed },
+			{ id: 'plat', label: 'Platform', collapsibleState: vscode.TreeItemCollapsibleState.Collapsed }
+		]
+
+		if ( picoTarget ) {
+			this.buildCategories.push( {
+				id: 'pico',
+				label: 'Pico Options',
+				collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+				iconPath: new vscode.ThemeIcon( 'circuit-board' )
+			} )
+		} else {
+			this.buildCategories.push(
+				{ id: 'app', label: 'App Options', collapsibleState: vscode.TreeItemCollapsibleState.Expanded },
+				{ id: 'arch', label: 'Architecture', collapsibleState: vscode.TreeItemCollapsibleState.Collapsed },
+				{ id: 'misc', label: 'Misc Options', collapsibleState: vscode.TreeItemCollapsibleState.Collapsed },
+				{ id: 'stub', label: 'App Stub', collapsibleState: vscode.TreeItemCollapsibleState.Collapsed }
+			)
+		}
+
+		this.buildCategories.push(
 			{ id: 'dev', label: 'Developer Options', collapsibleState: vscode.TreeItemCollapsibleState.Collapsed },
 			{
 				id: 'adv',
 				label: 'Advanced Options',
 				collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
 				iconPath: new vscode.ThemeIcon( 'beaker' )
-			},
-
-			this.createChildItem( true, 'legacy', 'Legacy Mode', 'Enable BlitzMax Legacy suspport', def.legacy )
-		]
+			}
+		)
+		if ( !picoTarget ) {
+			this.buildCategories.push( this.createChildItem( true, 'legacy', 'Legacy Mode', 'Enable BlitzMax Legacy support', def.legacy ) )
+		}
 
 		return Promise.resolve( this.buildCategories )
 	}
@@ -277,9 +294,11 @@ export class BmxBuildTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 					this.createChildItem( !def.legacy, 'b_qscan', 'Quick Scan', 'Do not scan modules for changes  \n`bmk -quick`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-quick)', def.quick ),
 					this.createChildItem( !def.legacy, 'b_overload', 'Overload Warnings', 'Defines missing override keywords in overridden methods and functions to be handled as error instead of warning  \n`bmk -w`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-w)', def.funcargcasting == 'warning' ),
 					this.createChildItem( !def.legacy, 'b_override', 'Require \'Override\' declaration', 'Sets requirement for overriding methods and functions to append override to their definitions  \n`bmk -override`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-override)', def.override ),
-					this.createChildItem( !def.legacy && def.override == true, 'b_raise', 'Raise \'override\' errors not warnings', 'Sets requirement for overriding methods and functions to append override to their definitions  \n`bmk -overerr`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-overerr)', def.overerr ),
-					this.createChildItem( !def.legacy && def.make == 'application' && def.apptype == 'gui', 'b_dpi', 'High Resolution (HiDPI)', 'Specifies that the application supports high-resolution screens  \n`bmk -hi`', def.hidpi )
+					this.createChildItem( !def.legacy && def.override == true, 'b_raise', 'Raise \'override\' errors not warnings', 'Sets requirement for overriding methods and functions to append override to their definitions  \n`bmk -overerr`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-overerr)', def.overerr )
 				)
+				if ( def.target != 'pico' ) {
+					items.push( this.createChildItem( !def.legacy && def.make == 'application' && def.apptype == 'gui', 'b_dpi', 'High Resolution (HiDPI)', 'Specifies that the application supports high-resolution screens  \n`bmk -hi`', def.hidpi ) )
+				}
 				break
 
 			case 'app':
@@ -296,9 +315,21 @@ export class BmxBuildTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 					this.createChildItem( !def.legacy, 'plat_linux', 'Linux', 'Build for Linux  \n`bmk -l linux`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)', def.target == 'linux' ),
 					this.createChildItem( !def.legacy && os.platform() == 'darwin', 'plat_macos', 'MacOS', 'Build for MacOS  \n`bmk -l macos`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)', def.target == 'macos' ),
 					this.createChildItem( !def.legacy, 'plat_raspberrypi', 'Raspberry Pi', 'Build for Raspberry Pi  \n`bmk -l raspberrypi`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)', def.target == 'raspberrypi' ),
+					this.createChildItem( !def.legacy, 'plat_pico', 'Raspberry Pi Pico', 'Build for a Raspberry Pi Pico SDK board  \n`bmk -l pico`', def.target == 'pico' ),
 					this.createChildItem( !def.legacy, 'plat_android', 'Android', 'Build for Android  \n`bmk -l android`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)', def.target == 'android' ),
 					this.createChildItem( !def.legacy, 'plat_nx', 'NX', 'Build for Nintendo Switch  \n`bmk -l nx`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)', def.target == 'nx' ),
 					this.createChildItem( !def.legacy, 'plat_emscripten', 'Web', 'Build for Web  \n`bmk -l emscripten`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)', def.target == 'emscripten' )
+				)
+				break
+
+			case 'pico':
+				items.push(
+					this.createChildItem( true, 'pico_board', 'Board', 'Pico SDK board definition  \n`bmk -board <board>`', def.picoBoard || 'pico2 (bmk default)' ),
+					this.createChildItem( true, 'pico_heap', 'Managed Heap', 'Managed heap size. Use `auto` for a board-aware size  \n`bmk -heap <auto|size>`', def.picoHeap || 'auto (bmk default)' ),
+					this.createChildItem( true, 'pico_heap_region', 'Heap Region', 'Place the managed heap in internal SRAM or external PSRAM  \n`bmk -heap-region <sram|psram>`', def.picoHeapRegion || 'bmk default' ),
+					this.createChildItem( true, 'pico_storage', 'Persistent Storage', 'Reserve sector-aligned flash storage. Use `none` to disable it  \n`bmk -storage <none|size>`', def.picoStorage || 'bmk default' ),
+					this.createChildItem( true, 'pico_float_abi', 'Floating-point ABI', 'Select the Pico floating-point calling convention  \n`bmk -float-abi <auto|hard>`', def.picoFloatAbi || 'bmk default' ),
+					this.createChildItem( true, 'pico_upload', 'Upload After Build', 'Upload and start the UF2 through picotool after building  \n`bmk -x`', def.picoUpload )
 				)
 				break
 
@@ -334,12 +365,24 @@ export class BmxBuildTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 			case 'dev':
 				items.push(
 					this.createChildItem( !def.legacy, 'dev_verbose', 'Verbose Build', 'Verbose (noisy) build  \n`bmk -v`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-v)', def.verbose ),
-					this.createChildItem( !def.legacy, 'dev_gdb', 'GDB Debug Generation', 'Generates line mappings suitable for GDB debugging  \n`bmk -gdb`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-gdb)', def.gdb ),
-					this.createChildItem( !def.legacy, 'dev_gprof', 'GProf Profiling', 'Gprof is a performance analysis tool for Unix applications  \n`bmk -gprof`', def.gprof )
+					this.createChildItem( !def.legacy, 'dev_gdb', 'GDB Debug Generation', 'Generates line mappings suitable for GDB debugging  \n`bmk -gdb`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-gdb)', def.gdb )
 				)
+				if ( def.target != 'pico' ) {
+					items.push( this.createChildItem( !def.legacy, 'dev_gprof', 'GProf Profiling', 'Gprof is a performance analysis tool for Unix applications  \n`bmk -gprof`', def.gprof ) )
+				}
 				break
 
 			case 'adv':
+				if ( def.target == 'pico' ) {
+					items.push(
+						this.createChildItem( true, 'adv_output', 'Output file', 'Specifies the output file relative to the workspace folder  \n`bmk -o <output-file>`', def.output ),
+						this.createChildItem( true, 'adv_conditional', 'Conditionals', 'User defined conditionals, usable via `?myconditional`  \n`bmk -ud <user-defined-conditionals>`', def.conditionals?.join( ', ' ) ),
+						this.createChildItem( true, 'adv_nostrictupgrade', 'No Strict Upgrade', 'Do not upgrade strict method void return types  \n`bmk -nostrictupgrade`', def.nostrictupgrade ),
+						this.createChildItem( true, 'adv_quiet', 'Quiet build', 'Quiet build  \n`bmk -q`', def.quiet ),
+						this.createChildItem( true, 'adv_single', 'Single Thread Compile', 'Disable multi-threaded build processing  \n`bmk -single`', def.single )
+					)
+					break
+				}
 				items.push(
 					this.createChildItem( def.make == 'application', 'adv_output', 'Output file', 'Specifies the output file relative to the workspace foder  \n`bmk -o <output-file>`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-o-output-file)', def.output ),
 					this.createChildItem( !def.legacy, 'adv_conditional', 'Conditionals', 'User defined conditionals, usable via `?myconditional`  \n`bmk -ud <user-defined-conditionals>`  \n[More info](https://blitzmax.org/docs/en/tools/bcc/#-ud-user-defined-conditionals)', def.conditionals?.join( ', ' ) ),
@@ -454,10 +497,75 @@ export async function toggleBuildOptions( definition: BmxBuildTaskDefinition | u
 		case 'plat_linux':
 		case 'plat_macos':
 		case 'plat_raspberrypi':
+		case 'plat_pico':
 		case 'plat_android':
 		case 'plat_nx':
 		case 'plat_emscripten':
 			definition.target = option.slice( 5 )
+			if ( definition.target == 'pico' ) {
+				definition.legacy = false
+				definition.make = 'application'
+				definition.onlycompile = false
+				definition.apptype = 'console'
+				definition.architecture = 'arm'
+			}
+			break
+
+		// Pico
+		case 'pico_board': {
+			const commonBoards = ['pico2', 'pico2_w', 'pico', 'pico_w']
+			if ( definition.picoBoard && !commonBoards.includes( definition.picoBoard ) ) commonBoards.unshift( definition.picoBoard )
+			const picked = await vscode.window.showQuickPick( [...commonBoards, 'Custom board…'], {
+				placeHolder: 'Select a Pico SDK board definition'
+			} )
+			if ( picked == 'Custom board…' ) {
+				const custom = await vscode.window.showInputBox( {
+					prompt: 'Pico SDK board name',
+					value: definition.picoBoard || ''
+				} )
+				if ( custom != undefined && custom.trim() ) definition.picoBoard = custom.trim()
+			} else if ( picked ) {
+				definition.picoBoard = picked
+			}
+			break
+		}
+
+		case 'pico_heap': {
+			const picked = await vscode.window.showInputBox( {
+				prompt: 'Managed heap size: auto, or a size such as 128KiB or 4MiB',
+				value: definition.picoHeap || 'auto'
+			} )
+			if ( picked != undefined ) definition.picoHeap = picked.trim() || undefined
+			break
+		}
+
+		case 'pico_heap_region': {
+			const picked = await vscode.window.showQuickPick( ['bmk default', 'sram', 'psram'], {
+				placeHolder: 'Select the managed heap memory region'
+			} )
+			if ( picked ) definition.picoHeapRegion = picked == 'bmk default' ? undefined : picked
+			break
+		}
+
+		case 'pico_storage': {
+			const picked = await vscode.window.showInputBox( {
+				prompt: 'Persistent flash storage: none, or a sector-aligned size such as 64KiB',
+				value: definition.picoStorage || 'none'
+			} )
+			if ( picked != undefined ) definition.picoStorage = picked.trim() || undefined
+			break
+		}
+
+		case 'pico_float_abi': {
+			const picked = await vscode.window.showQuickPick( ['bmk default', 'auto', 'hard'], {
+				placeHolder: 'Select the floating-point ABI'
+			} )
+			if ( picked ) definition.picoFloatAbi = picked == 'bmk default' ? undefined : picked
+			break
+		}
+
+		case 'pico_upload':
+			definition.picoUpload = !definition.picoUpload
 			break
 
 		// Architecture
