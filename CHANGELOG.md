@@ -1,3 +1,8 @@
+## 2.34.0
+* Added Raspberry Pi Pico build support (woollybah)
+* Picking Raspberry Pi Pico as the platform reveals its board, heap, storage, float ABI and picotool upload options
+* The language server now follows the default build task's mode, platform and architecture unless you set those yourself
+
 ## 2.33.0
 * Added MaxIDE-style build file locking (woollybah)
 * The build options view now shows a Build File item with a lock or unlock icon, and the unlock button sits in its title bar
