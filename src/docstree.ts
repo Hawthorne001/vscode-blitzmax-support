@@ -3,7 +3,7 @@
 import * as vscode from 'vscode'
 import * as path from 'path'
 import * as fs from 'fs'
-import { BlitzMaxPath } from './helper'
+import { BlitzMaxPath, onBlitzMaxPathChanged } from './helper'
 import { showBmxDocs } from './bmxwebviewer'
 import { BmxCommand, getCommand } from './bmxdocs'
 
@@ -11,9 +11,10 @@ export function registerDocsTreeProvider( context: vscode.ExtensionContext ) {
 	// Register documentation tree provider
 	const bmxDocsTreeProvider = new BmxDocsTreeProvider( context )
 	vscode.window.registerTreeDataProvider( 'blitzmax-documentation', bmxDocsTreeProvider )
+	context.subscriptions.push( onBlitzMaxPathChanged( () => bmxDocsTreeProvider.refresh() ) )
 
 	vscode.workspace.onDidChangeConfiguration( ( event ) => {
-		if ( event.affectsConfiguration( 'tasks' ) ) bmxDocsTreeProvider.refresh()
+		if ( event.affectsConfiguration( 'tasks' ) || event.affectsConfiguration( 'blitzmax.base.path' ) ) bmxDocsTreeProvider.refresh()
 	} )
 
 	// Related commands
@@ -103,11 +104,7 @@ export class BmxDocsTreeProvider implements vscode.TreeDataProvider<vscode.TreeI
 
 		// Fetch folders with a capital letter from \docs\html\
 		const dirPath = path.join( BlitzMaxPath, 'docs', 'html' )
-		const files = fs.readdirSync( dirPath )
-		if ( !files ) {
-			vscode.window.showErrorMessage( 'Unable to scan BlitzMax docs folder' )
-			return Promise.resolve( [] )
-		}
+		const files = fs.existsSync( dirPath ) ? fs.readdirSync( dirPath ) : []
 
 		files.forEach( function ( file ) {
 			// Test if capital

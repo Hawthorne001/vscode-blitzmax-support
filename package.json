@@ -36,6 +36,9 @@
 		"webpack": "webpack --mode development",
 		"webpack-dev": "webpack --mode development --watch",
 		"compile": "tsc -p ./src",
+		"test:esp32-boards": "npm run compile && node tests/esp32boards.test.js",
+		"test:esp32-options": "npm run compile && node tests/esp32boards.test.js && node tests/esp32task.test.js",
+		"test:workspace-sdk": "npm run compile && node tests/workspace-sdk-docs.test.js && node tests/workspace-sdk-formatter.test.js",
 		"lint": "eslint src --ext ts",
 		"watch": "tsc -watch -p ./src",
 		"compile-web": "webpack --config ./build/web-extension.webpack.config.js",
@@ -274,7 +277,7 @@
 				},
 				"blitzmax.base.path": {
 					"type": "string",
-					"description": "Absolute path to BlitzMax root.",
+					"markdownDescription": "Absolute path to the BlitzMax SDK root. You can override this in a workspace's `.vscode/settings.json`, or separately in each folder of a multi-root workspace. Builds use the SDK of the source file's folder. To run a language server from each folder's SDK, also enable #blitzmax.lsp.multi# and reload VS Code.",
 					"scope": "machine-overridable"
 				},
 				"blitzmax.pref.showProblemsOnBuildError": {
@@ -320,7 +323,7 @@
 				"blitzmax.lsp.hotReload": {
 					"type": "boolean",
 					"default": false,
-					"markdownDescription": "Restart the language server when its binary changes on disk, for when you are building the server yourself.  \n*(only supported on Linux)*",
+					"markdownDescription": "Restart the language server when its binary changes on disk, for when you are building the server yourself.  \n*(only supported on Linux and macOS)*",
 					"scope": "machine-overridable"
 				},
 				"blitzmax.lsp.buildMode": {
@@ -351,6 +354,7 @@
 						"android",
 						"raspberrypi",
 						"pico",
+						"esp32",
 						"emscripten",
 						"haiku",
 						"nx"
@@ -370,6 +374,7 @@
 						"arm64",
 						"ppc",
 						"riscv32",
+						"xtensa",
 						"riscv64",
 						"armeabi",
 						"armeabiv7a",
@@ -800,6 +805,8 @@
 									"armeabi",
 									"arm64",
 									"arm",
+									"riscv32",
+									"xtensa",
 									"x86",
 									"x64"
 								],
@@ -839,6 +846,7 @@
 									"android",
 									"raspberrypi",
 									"pico",
+									"esp32",
 									"nx"
 								],
 								"markdownDescription": "Cross-compiles to the specific target platform  \n`bmk -l <target-platform>`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)"
@@ -870,6 +878,11 @@
 								"default": false,
 								"markdownDescription": "Upload and start the Pico UF2 with picotool after building  \n`bmk -x`"
 							},
+							"esp32Board": { "type": "string", "description": "ESP32 board profile (bmk -board)." },
+							"esp32Heap": { "type": "string", "description": "ESP32 managed heap size (bmk -heap)." },
+							"esp32HeapRegion": { "type": "string", "enum": ["sram", "psram"], "description": "ESP32 managed heap region (bmk -heap-region)." },
+							"esp32Upload": { "type": "boolean", "default": false, "description": "Upload and start the ESP32 firmware after building (bmk -x)." },
+							"noAutoSuperStrict": { "type": "boolean", "default": false, "description": "Disable automatic SuperStrict mode (bmk -nas)." },
 							"musl": {
 								"type": "boolean",
 								"markdownDescription": "Enables musl libc compatibility (Linux NG only)  \n`bmk -musl`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-musl)"
@@ -1063,6 +1076,8 @@
 							"armeabi",
 							"arm64",
 							"arm",
+							"riscv32",
+							"xtensa",
 							"x86",
 							"x64"
 						],
@@ -1102,6 +1117,7 @@
 							"android",
 							"raspberrypi",
 							"pico",
+							"esp32",
 							"nx"
 						],
 						"markdownDescription": "Cross-compiles to the specific target platform  \n`bmk -l <target-platform>`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)"
@@ -1133,6 +1149,11 @@
 						"default": false,
 						"markdownDescription": "Upload and start the Pico UF2 with picotool after building  \n`bmk -x`"
 					},
+					"esp32Board": { "type": "string", "description": "ESP32 board profile (bmk -board)." },
+					"esp32Heap": { "type": "string", "description": "ESP32 managed heap size (bmk -heap)." },
+					"esp32HeapRegion": { "type": "string", "enum": ["sram", "psram"], "description": "ESP32 managed heap region (bmk -heap-region)." },
+					"esp32Upload": { "type": "boolean", "default": false, "description": "Upload and start the ESP32 firmware after building (bmk -x)." },
+					"noAutoSuperStrict": { "type": "boolean", "default": false, "description": "Disable automatic SuperStrict mode (bmk -nas)." },
 					"musl": {
 						"type": "boolean",
 						"markdownDescription": "Enables musl libc compatibility (Linux NG only)  \n`bmk -musl`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-musl)"

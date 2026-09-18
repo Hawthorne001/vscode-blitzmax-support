@@ -6,6 +6,35 @@ import { existsSync } from './common'
 import { cacheCommandsAndModulesIfEmpty } from './bmxdocs'
 
 export let BlitzMaxPath: string | undefined
+const blitzMaxPathChanged = new vscode.EventEmitter<void>()
+export const onBlitzMaxPathChanged = blitzMaxPathChanged.event
+
+export function getBlitzMaxPathForDocument( document?: vscode.TextDocument ): string | undefined {
+	const folder = document ? vscode.workspace.getWorkspaceFolder( document.uri ) : undefined
+	if ( folder ) return vscode.workspace.getConfiguration( 'blitzmax', folder ).get<string>( 'base.path' )
+
+	// A single open folder is also the workspace when no editor is active yet.
+	const folders = vscode.workspace.workspaceFolders
+	if ( !document && folders?.length === 1 )
+		return vscode.workspace.getConfiguration( 'blitzmax', folders[0] ).get<string>( 'base.path' )
+
+	const defaultPath = vscode.workspace.getConfiguration( 'blitzmax' ).get<string>( 'base.path' )
+	if ( defaultPath || document ) return defaultPath
+	// With no active editor and no shared default, show docs for the first
+	// folder that has an SDK instead of prompting to configure a global one.
+	for ( const workspaceFolder of folders || [] ) {
+		const folderPath = vscode.workspace.getConfiguration( 'blitzmax', workspaceFolder ).get<string>( 'base.path' )
+		if ( folderPath ) return folderPath
+	}
+	return undefined
+}
+
+function updateBlitzMaxPath( document?: vscode.TextDocument ) {
+	const nextPath = getBlitzMaxPathForDocument( document )
+	if ( BlitzMaxPath === nextPath ) return
+	BlitzMaxPath = nextPath
+	blitzMaxPathChanged.fire()
+}
 const bmxNoPathMessage = `No BlitzMax path configured!
 
 The BlitzMax extension needs to know your BlitzMax location.
@@ -14,12 +43,16 @@ Please select the root of your BlitzMax folder.
 This can be changed in settings later.`
 
 export function registerHelperGuide( context: vscode.ExtensionContext ) {
+	context.subscriptions.push( blitzMaxPathChanged )
 
 	// Make sure we know the BlitzMax path
-	BlitzMaxPath = vscode.workspace.getConfiguration( 'blitzmax' ).get( 'base.path' )
+	updateBlitzMaxPath( vscode.window.activeTextEditor?.document )
+	context.subscriptions.push( vscode.window.onDidChangeActiveTextEditor( editor => {
+		if ( editor ) updateBlitzMaxPath( editor.document )
+	} ) )
 	vscode.workspace.onDidChangeConfiguration( ( event ) => {
 		if ( event.affectsConfiguration( 'blitzmax.base.path' ) ) {
-			BlitzMaxPath = vscode.workspace.getConfiguration( 'blitzmax' ).get( 'base.path' )
+			updateBlitzMaxPath( vscode.window.activeTextEditor?.document )
 			triggerBmxInstallHelp()
 		}
 	} )
@@ -125,6 +158,7 @@ function triggerBmxInstallHelp() {
 		// Notify that the BlitzMax path is incorrect
 		if ( !existsSync( BlitzMaxPath + '/bin/bmk' ) ) {
 			BlitzMaxPath = undefined
+			blitzMaxPathChanged.fire()
 			vscode.window.showErrorMessage( 'The BlitzMax path is incorrect', 'Select path' ).then( picked => {
 				if ( picked ) {
 					vscode.commands.executeCommand( 'workbench.action.openSettings', '@ext:hezkore.blitzmax' )
