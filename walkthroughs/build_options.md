@@ -26,6 +26,23 @@ memory region, persistent flash storage, floating-point ABI, and optional upload
 through picotool. These are project build settings; SDK and tool locations
 remain configured in the developer's BlitzMax and Pico environment.
 
+# ESP32
+
+Select **ESP32** under **Platform** to reveal the ESP32-specific options. The
+board picker reads profiles from the configured BlitzMax SDK's `esp32.mod` and
+from `ESP32_BOARD_DIRS`, and also accepts a custom profile name. Picking a
+listed profile sets its Xtensa or RISC-V architecture; you can change the
+architecture separately. Without a board selection, `bmk` uses its generic
+ESP32 profile. Choosing RISC-V without a board still requires a matching
+generic ESP-IDF target profile (such as `esp32c3`); architecture alone cannot
+identify the chip family.
+
+The ESP32 section controls the managed heap size and SRAM/PSRAM region, plus
+optional upload through ESP-IDF. **Build and Run** uploads and starts embedded
+firmware; the BlitzMax desktop debugger is not used for these targets. Tool
+paths and the serial port remain configured through the ESP32/BlitzMax
+environment.
+
 # Locking the build file
 
 The **Build File** at the top of the view controls which `.bmx` file is used by

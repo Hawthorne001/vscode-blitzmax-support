@@ -4,16 +4,25 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as vscode from 'vscode'
 import * as cp from 'child_process'
-import { BlitzMaxPath } from './helper'
-import { showBmxDocs } from './bmxwebviewer'
+import { BlitzMaxPath, onBlitzMaxPathChanged } from './helper'
+import { registerBmxWebViewer, showBmxDocs } from './bmxwebviewer'
 import { lspDocsTarget } from './lsp'
 import { convertTypeTag, generateCommandText, getCurrentDocumentWord } from './common'
 import * as awaitNotify from 'await-notify'
 
-let _commandsList: BmxCommand[]
-let _modulesList: BmxModule[]
+let _commandsList: BmxCommand[] | undefined
+let _modulesList: BmxModule[] | undefined
+let cachedSdkPath: string | undefined
+
+function invalidateDocsCache() {
+	_commandsList = undefined
+	_modulesList = undefined
+	cachedSdkPath = undefined
+}
 
 export function registerDocsProvider( context: vscode.ExtensionContext ) {
+	registerBmxWebViewer( context )
+	context.subscriptions.push( onBlitzMaxPathChanged( invalidateDocsCache ) )
 	// Related commands
 	context.subscriptions.push( vscode.commands.registerCommand( 'blitzmax.searchDocs', async () => {
 		searchDocs()
@@ -35,11 +44,11 @@ export function registerDocsProvider( context: vscode.ExtensionContext ) {
 	} ) )
 
 	context.subscriptions.push( vscode.commands.registerCommand( 'blitzmax.rebuildDoc', _ => {
-		if ( !BlitzMaxPath ) return
+		const sdkPath = BlitzMaxPath
+		if ( !sdkPath ) return
 
 		// Reset old commands and modules
-		_commandsList = []
-		_modulesList = []
+		invalidateDocsCache()
 
 		vscode.window.withProgress( {
 			location: vscode.ProgressLocation.Notification,
@@ -58,7 +67,7 @@ export function registerDocsProvider( context: vscode.ExtensionContext ) {
 			} )
 
 			const procStart = process.hrtime()
-			let docProcess = cp.spawn( BlitzMaxPath + '/bin/makedocs' )
+			let docProcess = cp.spawn( path.join( sdkPath, 'bin', 'makedocs' ) )
 
 			function reportProgress( data: any ) {
 				const str: string[] = data.toString().split( '\n' )
@@ -85,6 +94,8 @@ export function registerDocsProvider( context: vscode.ExtensionContext ) {
 				const procEnd = process.hrtime( procStart )
 
 				console.log( `Rebuild documentation time: ${procEnd[0]}s ${procEnd[1] / 1000000}ms\r\n\r\n` )
+				if ( BlitzMaxPath === sdkPath ) invalidateDocsCache()
+				vscode.commands.executeCommand( 'blitzmax.refreshDocs' )
 				busy.notify()
 			} )
 
@@ -97,6 +108,8 @@ export function registerDocsProvider( context: vscode.ExtensionContext ) {
 export async function searchDocs() {
 	cacheCommandsAndModulesIfEmpty( true )
 	if ( !_commandsList ) return
+	const sdkPath = BlitzMaxPath
+	if ( !sdkPath ) return
 	
 	let allCommands = getCommand()
 	
@@ -109,7 +122,7 @@ export async function searchDocs() {
 		for ( let index = 0; index < pickItems.length; index++ ) {
 			const pickItem = pickItems[index];
 			if ( pickItem === selection ) {
-				showBmxDocs( vscode.Uri.file( BlitzMaxPath + '/' + allCommands[index].url ).fsPath, allCommands[index].urlLocation )
+				showBmxDocs( vscode.Uri.file( path.join( sdkPath, allCommands[index].url || '' ) ).fsPath, allCommands[index].urlLocation )
 				return
 			}
 		}
@@ -119,6 +132,8 @@ export async function searchDocs() {
 export async function showQuickHelp( command: string, orElse?: string ) {
 	cacheCommandsAndModulesIfEmpty( true )
 	if ( !_commandsList ) return
+	const sdkPath = BlitzMaxPath
+	if ( !sdkPath ) return
 	let commands = getCommand( command )//, { hasDescription: true } )
 
 	// Multi match
@@ -132,7 +147,7 @@ export async function showQuickHelp( command: string, orElse?: string ) {
 			for ( let index = 0; index < pickItems.length; index++ ) {
 				const pickItem = pickItems[index];
 				if ( pickItem === selection ) {
-					showBmxDocs( vscode.Uri.file( BlitzMaxPath + '/' + commands[index].url ).fsPath, commands[index].urlLocation )
+					showBmxDocs( vscode.Uri.file( path.join( sdkPath, commands[index].url || '' ) ).fsPath, commands[index].urlLocation )
 					return
 				}
 			}
@@ -142,7 +157,7 @@ export async function showQuickHelp( command: string, orElse?: string ) {
 
 	// Single match
 	if ( commands.length == 1 ) {
-		showBmxDocs( vscode.Uri.file( BlitzMaxPath + '/' + commands[0].url ).fsPath, commands[0].urlLocation )
+		showBmxDocs( vscode.Uri.file( path.join( sdkPath, commands[0].url || '' ) ).fsPath, commands[0].urlLocation )
 		return
 	}
 
@@ -201,6 +216,8 @@ export function getCommand( command: string | undefined = undefined, filter: Get
 }
 
 export function getModule( module: string | undefined = undefined ): BmxModule[] {
+	cacheCommandsAndModulesIfEmpty( false )
+	if ( !_modulesList ) return []
 	// Find the module
 	if ( module ) module = module.toLowerCase()
 	let matches: BmxModule[] = []
@@ -214,10 +231,16 @@ export function getModule( module: string | undefined = undefined ): BmxModule[]
 }
 
 export function cacheCommandsAndModulesIfEmpty( showPopup: boolean ): boolean {
-	if ( !_commandsList || _commandsList.length <= 0 ) {
-		cacheCommands( showPopup )
-		cacheModules()
+	if ( !BlitzMaxPath ) {
+		invalidateDocsCache()
+		return false
 	}
+	if ( cachedSdkPath !== BlitzMaxPath ) {
+		invalidateDocsCache()
+		cachedSdkPath = BlitzMaxPath
+	}
+	if ( !_commandsList ) cacheCommands( showPopup )
+	if ( !_modulesList ) cacheModules()
 	return _commandsList ? _commandsList.length >= 0 : false
 }
 
@@ -225,9 +248,9 @@ export function cacheCommandsAndModulesIfEmpty( showPopup: boolean ): boolean {
 function cacheModules() {
 	console.log( 'Caching BlitzMax module paths' )
 
-	const globalBmxPath = vscode.workspace.getConfiguration( 'blitzmax' ).inspect( 'base.path' )?.globalValue
-	const relativePath = '/mod/'
-	const absolutePath = vscode.Uri.file( path.join( <string>(globalBmxPath), relativePath ) ).fsPath
+	const sdkPath = BlitzMaxPath
+	if ( !sdkPath ) return
+	const absolutePath = path.join( sdkPath, 'mod' )
 	let parentPath: string | undefined
 	let totalPath: string | undefined
 
@@ -239,7 +262,7 @@ function cacheModules() {
 		fs.readdirSync( absolutePath ).forEach( parent => {
 			// MUST have the .mod extension
 			if ( parent.toLowerCase().endsWith( '.mod' ) ) {
-				parentPath = vscode.Uri.file( globalBmxPath + relativePath + '/' + parent ).fsPath
+				parentPath = path.join( sdkPath, 'mod', parent )
 
 				fs.readdirSync( parentPath ).forEach( child => {
 
@@ -251,7 +274,7 @@ function cacheModules() {
 							if ( source.toLowerCase().endsWith( '.bmx' ) &&
 								source.toLowerCase().slice( 0, -4 ) == child.toLowerCase().slice( 0, -4 ) ) {
 
-								_modulesList.push( {
+								_modulesList!.push( {
 									path: totalPath ? totalPath : 'undefined',
 									pathSource: path.join( totalPath ? totalPath : 'undefined', source ),
 									parent: parent.slice( 0, -4 ),
@@ -273,13 +296,13 @@ function cacheModules() {
 function cacheCommands( showPopup: boolean ): boolean {
 	console.log( 'Caching BlitzMax commands' )
 
-	const globalBmxPath = vscode.workspace.getConfiguration( 'blitzmax' ).inspect( 'base.path' )?.globalValue
-	const relativePath = '/docs/html/Modules/commands.txt'
-	const absolutePath = vscode.Uri.file( globalBmxPath + relativePath ).fsPath
+	const sdkPath = BlitzMaxPath
+	if ( !sdkPath ) return false
+	const absolutePath = path.join( sdkPath, 'docs', 'html', 'Modules', 'commands.txt' )
 
+	_commandsList = []
 	try {
 		const data = fs.readFileSync( absolutePath, 'utf8' )
-		_commandsList = []
 		addCommand( data )
 	} catch ( err ) {
 		//console.error( 'Couldn\'t open commands.txt:' )
@@ -536,7 +559,7 @@ function addCommand( data: string ) {
 			}
 
 			// Done!
-			_commandsList.push( command )
+			_commandsList!.push( command )
 		}
 
 	} )

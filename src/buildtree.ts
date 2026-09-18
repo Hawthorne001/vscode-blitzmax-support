@@ -3,6 +3,7 @@
 import * as vscode from 'vscode'
 import * as path from 'path'
 import * as os from 'os'
+import { loadEsp32BoardProfiles, Esp32BoardProfile } from './esp32boards'
 import {
 	getBuildDefinitionFromWorkspace,
 	saveAsDefaultTaskDefinition,
@@ -15,6 +16,11 @@ import {
 } from './taskprovider'
 
 let CurrentWorkspace: vscode.WorkspaceFolder | undefined = undefined
+
+function installedEsp32Boards(): Esp32BoardProfile[] {
+	const sdkPath = vscode.workspace.getConfiguration( 'blitzmax', CurrentWorkspace ).get<string>( 'base.path' )
+	return loadEsp32BoardProfiles( sdkPath )
+}
 
 export function registerBuildTreeProvider( context: vscode.ExtensionContext ) {
 
@@ -241,6 +247,8 @@ export class BmxBuildTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 		vscode.commands.executeCommand( 'setContext', 'blitzmax:buildFileLocked', buildFileLocked )
 
 		const picoTarget = def.target == 'pico'
+		const esp32Target = def.target == 'esp32'
+		const embeddedTarget = picoTarget || esp32Target
 		this.buildCategories = [
 			// No category root items
 			buildFile,
@@ -253,6 +261,13 @@ export class BmxBuildTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 			this.buildCategories.push( {
 				id: 'pico',
 				label: 'Pico Options',
+				collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
+				iconPath: new vscode.ThemeIcon( 'circuit-board' )
+			} )
+		} else if ( esp32Target ) {
+			this.buildCategories.push( {
+				id: 'esp32',
+				label: 'ESP32 Options',
 				collapsibleState: vscode.TreeItemCollapsibleState.Expanded,
 				iconPath: new vscode.ThemeIcon( 'circuit-board' )
 			} )
@@ -274,7 +289,7 @@ export class BmxBuildTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 				iconPath: new vscode.ThemeIcon( 'beaker' )
 			}
 		)
-		if ( !picoTarget ) {
+		if ( !embeddedTarget ) {
 			this.buildCategories.push( this.createChildItem( true, 'legacy', 'Legacy Mode', 'Enable BlitzMax Legacy support', def.legacy ) )
 		}
 
@@ -296,7 +311,7 @@ export class BmxBuildTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 					this.createChildItem( !def.legacy, 'b_override', 'Require \'Override\' declaration', 'Sets requirement for overriding methods and functions to append override to their definitions  \n`bmk -override`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-override)', def.override ),
 					this.createChildItem( !def.legacy && def.override == true, 'b_raise', 'Raise \'override\' errors not warnings', 'Sets requirement for overriding methods and functions to append override to their definitions  \n`bmk -overerr`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-overerr)', def.overerr )
 				)
-				if ( def.target != 'pico' ) {
+				if ( def.target != 'pico' && def.target != 'esp32' ) {
 					items.push( this.createChildItem( !def.legacy && def.make == 'application' && def.apptype == 'gui', 'b_dpi', 'High Resolution (HiDPI)', 'Specifies that the application supports high-resolution screens  \n`bmk -hi`', def.hidpi ) )
 				}
 				break
@@ -316,6 +331,7 @@ export class BmxBuildTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 					this.createChildItem( !def.legacy && os.platform() == 'darwin', 'plat_macos', 'MacOS', 'Build for MacOS  \n`bmk -l macos`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)', def.target == 'macos' ),
 					this.createChildItem( !def.legacy, 'plat_raspberrypi', 'Raspberry Pi', 'Build for Raspberry Pi  \n`bmk -l raspberrypi`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)', def.target == 'raspberrypi' ),
 					this.createChildItem( !def.legacy, 'plat_pico', 'Raspberry Pi Pico', 'Build for a Raspberry Pi Pico SDK board  \n`bmk -l pico`', def.target == 'pico' ),
+					this.createChildItem( !def.legacy, 'plat_esp32', 'ESP32', 'Build for an ESP-IDF board  \n`bmk -l esp32`', def.target == 'esp32' ),
 					this.createChildItem( !def.legacy, 'plat_android', 'Android', 'Build for Android  \n`bmk -l android`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)', def.target == 'android' ),
 					this.createChildItem( !def.legacy, 'plat_nx', 'NX', 'Build for Nintendo Switch  \n`bmk -l nx`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)', def.target == 'nx' ),
 					this.createChildItem( !def.legacy, 'plat_emscripten', 'Web', 'Build for Web  \n`bmk -l emscripten`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-l-target-platform)', def.target == 'emscripten' )
@@ -330,6 +346,16 @@ export class BmxBuildTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 					this.createChildItem( true, 'pico_storage', 'Persistent Storage', 'Reserve sector-aligned flash storage. Use `none` to disable it  \n`bmk -storage <none|size>`', def.picoStorage || 'bmk default' ),
 					this.createChildItem( true, 'pico_float_abi', 'Floating-point ABI', 'Select the Pico floating-point calling convention  \n`bmk -float-abi <auto|hard>`', def.picoFloatAbi || 'bmk default' ),
 					this.createChildItem( true, 'pico_upload', 'Upload After Build', 'Upload and start the UF2 through picotool after building  \n`bmk -x`', def.picoUpload )
+				)
+				break
+
+			case 'esp32':
+				items.push(
+					this.createChildItem( true, 'esp32_board', 'Board', 'ESP32 board profile from the installed SDK, or a custom profile name  \n`bmk -board <profile>`', def.esp32Board || 'esp32 (bmk default)' ),
+					this.createChildItem( true, 'esp32_arch', 'Architecture', 'Xtensa or RISC-V. A recognised board profile selects this automatically  \n`bmk -g <xtensa|riscv32>`', def.architecture || 'inferred by bmk' ),
+					this.createChildItem( true, 'esp32_heap', 'Managed Heap', 'Managed heap size. Use `auto` for a target-aware size  \n`bmk -heap <auto|size>`', def.esp32Heap || 'auto (bmk default)' ),
+					this.createChildItem( true, 'esp32_heap_region', 'Heap Region', 'Place the managed heap in internal SRAM or profile-defined PSRAM  \n`bmk -heap-region <sram|psram>`', def.esp32HeapRegion || 'bmk default' ),
+					this.createChildItem( true, 'esp32_upload', 'Upload After Build', 'Flash and start the application with ESP-IDF after building  \n`bmk -x`', def.esp32Upload )
 				)
 				break
 
@@ -367,17 +393,18 @@ export class BmxBuildTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 					this.createChildItem( !def.legacy, 'dev_verbose', 'Verbose Build', 'Verbose (noisy) build  \n`bmk -v`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-v)', def.verbose ),
 					this.createChildItem( !def.legacy, 'dev_gdb', 'GDB Debug Generation', 'Generates line mappings suitable for GDB debugging  \n`bmk -gdb`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-gdb)', def.gdb )
 				)
-				if ( def.target != 'pico' ) {
+				if ( def.target != 'pico' && def.target != 'esp32' ) {
 					items.push( this.createChildItem( !def.legacy, 'dev_gprof', 'GProf Profiling', 'Gprof is a performance analysis tool for Unix applications  \n`bmk -gprof`', def.gprof ) )
 				}
 				break
 
 			case 'adv':
-				if ( def.target == 'pico' ) {
+				if ( def.target == 'pico' || def.target == 'esp32' ) {
 					items.push(
 						this.createChildItem( true, 'adv_output', 'Output file', 'Specifies the output file relative to the workspace folder  \n`bmk -o <output-file>`', def.output ),
 						this.createChildItem( true, 'adv_conditional', 'Conditionals', 'User defined conditionals, usable via `?myconditional`  \n`bmk -ud <user-defined-conditionals>`', def.conditionals?.join( ', ' ) ),
 						this.createChildItem( true, 'adv_nostrictupgrade', 'No Strict Upgrade', 'Do not upgrade strict method void return types  \n`bmk -nostrictupgrade`', def.nostrictupgrade ),
+						this.createChildItem( true, 'adv_no_auto_superstrict', 'No Auto SuperStrict', 'Do not automatically treat source files as SuperStrict  \n`bmk -nas`', def.noAutoSuperStrict ),
 						this.createChildItem( true, 'adv_quiet', 'Quiet build', 'Quiet build  \n`bmk -q`', def.quiet ),
 						this.createChildItem( true, 'adv_single', 'Single Thread Compile', 'Disable multi-threaded build processing  \n`bmk -single`', def.single )
 					)
@@ -391,6 +418,7 @@ export class BmxBuildTreeProvider implements vscode.TreeDataProvider<vscode.Tree
 					this.createChildItem( !def.legacy, 'adv_compileonly', 'Compile Only', 'Compile sources only, no building of the application  \n`bmk compile`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#compile)', def.onlycompile ),
 					this.createChildItem( !def.legacy && def.target == 'macos', 'adv_universal', 'Universal Build', 'Creates a Universal build for supported platforms (Mac OS X and iOS)  \n`bmk -i`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-i)', def.universal ),
 					this.createChildItem( !def.legacy, 'adv_nostrictupgrade', 'No Strict Upgrade', 'Don\'t upgrade strict method void return types, if required  \n`bmk -nostrictupgrade`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-nostrictupgrade)', def.nostrictupgrade ),
+					this.createChildItem( !def.legacy, 'adv_no_auto_superstrict', 'No Auto SuperStrict', 'Do not automatically treat source files as SuperStrict  \n`bmk -nas`', def.noAutoSuperStrict ),
 					this.createChildItem( !def.legacy, 'adv_quiet', 'Quiet build', 'Quiet build  \n`bmk -q`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-q)', def.quiet ),
 					this.createChildItem( !def.legacy, 'adv_standalone', 'Standalone', 'Generate but do not compile into binary form  \n`bmk -standalone`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-standalone)', def.standalone ),
 					this.createChildItem( ( def.target == 'linux' || def.target == 'raspberrypi' ) && !def.legacy, 'adv_static', 'Static', 'Statically link binary (Linux NG only)  \n`bmk -static`  \n[More info](https://blitzmax.org/docs/en/tools/bmk/#-static)', def.static ),
@@ -498,6 +526,7 @@ export async function toggleBuildOptions( definition: BmxBuildTaskDefinition | u
 		case 'plat_macos':
 		case 'plat_raspberrypi':
 		case 'plat_pico':
+		case 'plat_esp32':
 		case 'plat_android':
 		case 'plat_nx':
 		case 'plat_emscripten':
@@ -508,6 +537,14 @@ export async function toggleBuildOptions( definition: BmxBuildTaskDefinition | u
 				definition.onlycompile = false
 				definition.apptype = 'console'
 				definition.architecture = 'arm'
+			} else if ( definition.target == 'esp32' ) {
+				definition.legacy = false
+				definition.make = 'application'
+				definition.onlycompile = false
+				definition.apptype = 'console'
+				definition.architecture = definition.esp32Board
+					? installedEsp32Boards().find( profile => profile.id == definition.esp32Board )?.architecture
+					: 'xtensa'
 			}
 			break
 
@@ -566,6 +603,56 @@ export async function toggleBuildOptions( definition: BmxBuildTaskDefinition | u
 
 		case 'pico_upload':
 			definition.picoUpload = !definition.picoUpload
+			break
+
+		// ESP32
+		case 'esp32_board': {
+			const profiles = installedEsp32Boards()
+			const choices: { label: string; description?: string; profile?: Esp32BoardProfile; action?: string }[] = [
+				{ label: 'bmk default (generic ESP32)', action: 'default' },
+				...profiles.map( profile => ( { label: profile.id, description: `${profile.name} · ${profile.target} · ${profile.architecture}`, profile } ) ),
+				{ label: 'Custom profile name…', action: 'custom' }
+			]
+			const picked = await vscode.window.showQuickPick( choices, { placeHolder: 'Select an installed ESP32 board profile, or enter a name' } )
+			if ( picked?.profile ) {
+				definition.esp32Board = picked.profile.id
+				definition.architecture = picked.profile.architecture
+			} else if ( picked?.action == 'default' ) {
+				definition.esp32Board = undefined
+				definition.architecture = 'xtensa'
+			} else if ( picked?.action == 'custom' ) {
+				const custom = await vscode.window.showInputBox( { prompt: 'ESP32 board profile name', value: definition.esp32Board || '' } )
+				if ( custom != undefined && custom.trim() ) {
+					definition.esp32Board = custom.trim()
+					definition.architecture = profiles.find( profile => profile.id == definition.esp32Board )?.architecture
+				}
+			}
+			break
+		}
+
+		case 'esp32_arch': {
+			const picked = await vscode.window.showQuickPick( ['bmk default', 'xtensa', 'riscv32'], { placeHolder: 'Select the ESP32 architecture' } )
+			if ( picked ) definition.architecture = picked == 'bmk default' ? undefined : picked
+			break
+		}
+
+		case 'esp32_heap': {
+			const picked = await vscode.window.showInputBox( {
+				prompt: 'Managed heap size: auto, or a size such as 128KiB or 4MiB',
+				value: definition.esp32Heap || 'auto'
+			} )
+			if ( picked != undefined ) definition.esp32Heap = picked.trim() || undefined
+			break
+		}
+
+		case 'esp32_heap_region': {
+			const picked = await vscode.window.showQuickPick( ['bmk default', 'sram', 'psram'], { placeHolder: 'Select the managed heap memory region' } )
+			if ( picked ) definition.esp32HeapRegion = picked == 'bmk default' ? undefined : picked
+			break
+		}
+
+		case 'esp32_upload':
+			definition.esp32Upload = !definition.esp32Upload
 			break
 
 		// Architecture
@@ -631,6 +718,10 @@ export async function toggleBuildOptions( definition: BmxBuildTaskDefinition | u
 
 		case 'adv_nostrictupgrade':
 			definition.nostrictupgrade = !definition.nostrictupgrade
+			break
+
+		case 'adv_no_auto_superstrict':
+			definition.noAutoSuperStrict = !definition.noAutoSuperStrict
 			break
 
 		case 'adv_quiet':

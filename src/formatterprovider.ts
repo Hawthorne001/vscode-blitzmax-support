@@ -3,8 +3,8 @@
 import * as vscode from 'vscode'
 import * as process from 'child_process'
 import * as awaitNotify from 'await-notify'
-import { existsSync, workspaceOrGlobalConfigString } from './common'
-import { triggerBmxFormatterHelp } from './helper'
+import { existsSync } from './common'
+import { getBlitzMaxPathForDocument, triggerBmxFormatterHelp } from './helper'
 import { lspFormats, onLspChanged } from './lsp'
 
 let formatterBusy = new awaitNotify.Subject()
@@ -39,13 +39,14 @@ function resetFormatter() {
 
 // Where the formatter binary would be, if there is one
 // Does not touch formatterOptions, so it is safe to ask at any time
-function formatterPath(): string | undefined {
+function formatterPath( document?: vscode.TextDocument ): string | undefined {
+	const folder = document ? vscode.workspace.getWorkspaceFolder( document.uri ) : undefined
 
-	let path: string | undefined = vscode.workspace.getConfiguration( 'blitzmax' ).get( 'formatter.path' )
+	let path: string | undefined = vscode.workspace.getConfiguration( 'blitzmax', folder ).get( 'formatter.path' )
 	if ( !path ) return undefined
 
 	if ( path.startsWith( '.' ) ) {
-		const bmxPath = workspaceOrGlobalConfigString( undefined, 'blitzmax.base.path' )
+		const bmxPath = getBlitzMaxPathForDocument( document )
 		if ( !bmxPath ) return undefined
 		path = vscode.Uri.file( bmxPath + path.slice( 1 ) ).fsPath
 	}
@@ -61,7 +62,7 @@ function formatterPath(): string | undefined {
 // explaining what is missing instead of a dead end from VS Code
 function updateFormatterProviders() {
 
-	const path = formatterPath()
+	const path = formatterPath( vscode.window.activeTextEditor?.document )
 	const haveBinary = !!path && !!existsSync( path )
 	const wanted = haveBinary || !lspFormats()
 	const registered = formatterProviders.length > 0
@@ -93,7 +94,7 @@ function updateFormatterProviders() {
 		vscode.languages.registerDocumentRangeFormattingEditProvider( 'blitzmax', {
 			async provideDocumentRangeFormattingEdits( document: vscode.TextDocument, range: vscode.Range ): Promise<vscode.TextEdit[]> {
 
-				if ( vscode.workspace.getConfiguration( 'blitzmax' ).get( 'formatter.useRange' ) ) {
+				if ( vscode.workspace.getConfiguration( 'blitzmax', vscode.workspace.getWorkspaceFolder( document.uri ) ).get( 'formatter.useRange' ) ) {
 					const firstLine = document.lineAt( 0 )
 					const lastLine = document.lineAt( document.lineCount - 1 )
 					const textRange = new vscode.Range( firstLine.range.start, lastLine.range.end )
@@ -132,6 +133,10 @@ function updateFormatterProviders() {
 }
 
 export function registerFormatterProvider( context: vscode.ExtensionContext ) {
+	context.subscriptions.push( vscode.window.onDidChangeActiveTextEditor( () => {
+		resetFormatter()
+		updateFormatterProviders()
+	} ) )
 
 	vscode.workspace.onDidChangeConfiguration( ( event ) => {
 		if ( event.affectsConfiguration( 'blitzmax.formatter' )
@@ -153,7 +158,7 @@ export function registerFormatterProvider( context: vscode.ExtensionContext ) {
 	updateFormatterProviders()
 }
 
-async function initFormatter(): Promise<boolean> {
+async function initFormatter( document?: vscode.TextDocument ): Promise<boolean> {
 	return new Promise( async ( resolve, reject ) => {
 
 		//console.log( 'Initializing BlitzMax formatter' )
@@ -168,17 +173,8 @@ async function initFormatter(): Promise<boolean> {
 		formatterOptions.initAttempts += 1
 
 		// Fetch formatter path
-		formatterOptions.path = vscode.workspace.getConfiguration( 'blitzmax' ).get( 'formatter.path' )
+		formatterOptions.path = formatterPath( document )
 		if ( !formatterOptions.path ) return resolve( false )
-
-		// Relative formatter path?
-		const isRelativePath: boolean = formatterOptions.path.startsWith( '.' )
-		if ( isRelativePath ) {
-			// relative
-			formatterOptions.path = formatterOptions.path.slice( 1 )
-			const bmxPath = workspaceOrGlobalConfigString( undefined, 'blitzmax.base.path' )
-			if ( bmxPath ) formatterOptions.path = vscode.Uri.file( bmxPath + formatterOptions.path ).fsPath
-		}
 
 		// Does it exist?
 		formatterOptions.exists = !!existsSync( formatterOptions.path )
@@ -188,11 +184,12 @@ async function initFormatter(): Promise<boolean> {
 		if ( !formatterOptions.ready ) return resolve( false )
 
 		// Fetch arguments
-		formatterOptions.arg = vscode.workspace.getConfiguration( 'blitzmax' ).get( 'formatter.args' )
-		formatterOptions.onTypeArg = vscode.workspace.getConfiguration( 'blitzmax' ).get( 'formatter.onType' )
-		formatterOptions.startArg = vscode.workspace.getConfiguration( 'blitzmax' ).get( 'formatter.range.start' )
-		formatterOptions.endArg = vscode.workspace.getConfiguration( 'blitzmax' ).get( 'formatter.range.end' )
-		formatterOptions.fileArg = vscode.workspace.getConfiguration( 'blitzmax' ).get( 'formatter.file' )
+		const config = vscode.workspace.getConfiguration( 'blitzmax', document ? vscode.workspace.getWorkspaceFolder( document.uri ) : undefined )
+		formatterOptions.arg = config.get( 'formatter.args' )
+		formatterOptions.onTypeArg = config.get( 'formatter.onType' )
+		formatterOptions.startArg = config.get( 'formatter.range.start' )
+		formatterOptions.endArg = config.get( 'formatter.range.end' )
+		formatterOptions.fileArg = config.get( 'formatter.file' )
 
 		return resolve( true )
 	} )
@@ -200,11 +197,12 @@ async function initFormatter(): Promise<boolean> {
 
 async function format( text: string, onType: boolean, range: vscode.Range | undefined = undefined, document: vscode.TextDocument | undefined = undefined ): Promise<string> {
 	return new Promise( async ( resolve, reject ) => {
+		if ( formatterOptions.path !== formatterPath( document ) ) resetFormatter()
 
 		// Only init on the first "Format On Type"
 		if ( !onType || ( onType && formatterOptions.initAttempts <= 0 ) ) {
 			// Make sure the formatter is properly setup
-			if ( !formatterOptions.ready ) await initFormatter()
+			if ( !formatterOptions.ready ) await initFormatter( document )
 
 			// Say what is missing, but only once, or turning on Format On Save would
 			// put the same message up on every save

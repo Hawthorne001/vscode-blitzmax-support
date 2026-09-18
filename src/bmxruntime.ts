@@ -36,8 +36,10 @@ export function registerDebugger( context: vscode.ExtensionContext ) {
 	} ) )
 	context.subscriptions.push( vscode.commands.registerCommand( 'blitzmax.buildAndRun', () => {
 		const definition = getBuildDefinitionFromWorkspace( undefined )
-		if ( definition.target == 'pico' ) {
-			const uploadDefinition = Object.assign( {}, definition, { debug: false, picoUpload: true } )
+		if ( definition.target == 'pico' || definition.target == 'esp32' ) {
+			const uploadDefinition = Object.assign( {}, definition, definition.target == 'pico'
+				? { debug: false, picoUpload: true }
+				: { debug: false, esp32Upload: true } )
 			vscode.tasks.executeTask( makeTask( uploadDefinition ) )
 			return
 		}
@@ -84,9 +86,9 @@ export class BmxDebugConfigurationProvider implements vscode.DebugConfigurationP
 		}
 
 		const effectiveTarget = config.target || getBuildDefinitionFromWorkspace( workspace ).target
-		if ( effectiveTarget == 'pico' ) {
+		if ( effectiveTarget == 'pico' || effectiveTarget == 'esp32' ) {
 			return vscode.window.showInformationMessage(
-				'Pico debugging uses GDB and OpenOCD rather than the BlitzMax desktop debugger. Select your Pico GDB launch configuration to debug the generated ELF.'
+				'Embedded debugging uses GDB rather than the BlitzMax desktop debugger. Select a target-specific GDB launch configuration to debug the generated ELF.'
 			).then( _ => undefined )
 		}
 

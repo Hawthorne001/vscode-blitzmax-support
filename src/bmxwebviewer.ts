@@ -4,10 +4,15 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as vscode from 'vscode'
 import { readFile } from './common'
-import { BlitzMaxPath } from './helper'
+import { BlitzMaxPath, onBlitzMaxPathChanged } from './helper'
 
 let webPanel: vscode.WebviewPanel | undefined
 let webViewPath: string = ''
+let webPanelSdkPath: string | undefined
+
+export function registerBmxWebViewer( context: vscode.ExtensionContext ) {
+	context.subscriptions.push( onBlitzMaxPathChanged( () => webPanel?.dispose() ) )
+}
 
 export async function showBmxDocs( url: string | undefined, jumpTo: string | undefined = undefined ) {
 	// Make sure we have the data we need
@@ -35,6 +40,7 @@ export async function showBmxDocs( url: string | undefined, jumpTo: string | und
 
 function setupWebPanel() {
 	if ( !BlitzMaxPath ) return
+	if ( webPanel && webPanelSdkPath !== BlitzMaxPath ) webPanel.dispose()
 	if ( webPanel ) {
 		// TODO make 'preserveFocus' a user setting
 		webPanel.title = 'BlitzMax Help'
@@ -52,9 +58,10 @@ function setupWebPanel() {
 			enableScripts: true,
 			enableCommandUris: true,
 			enableFindWidget: true,
-			localResourceRoots: [vscode.Uri.parse( path.join( BlitzMaxPath, 'docs', 'html' ) )]
+			localResourceRoots: [vscode.Uri.file( path.join( BlitzMaxPath, 'docs', 'html' ) )]
 		}
 	)
+	webPanelSdkPath = BlitzMaxPath
 
 	// Handle messages from the webview
 	webPanel.webview.onDidReceiveMessage( message => {
@@ -102,6 +109,7 @@ function setupWebPanel() {
 
 	webPanel.onDidDispose( () => {
 		webPanel = undefined
+		webPanelSdkPath = undefined
 	},
 		undefined,
 		//documentationContext.subscriptions

@@ -32,6 +32,7 @@ export interface BmxBuildOptions {
 	target?: string
 	musl?: boolean
 	nostrictupgrade?: boolean
+	noAutoSuperStrict?: boolean
 	output?: string
 	quiet?: boolean
 	quick?: boolean
@@ -56,6 +57,10 @@ export interface BmxBuildOptions {
 	picoStorage?: string
 	picoFloatAbi?: string
 	picoUpload?: boolean
+	esp32Board?: string
+	esp32Heap?: string
+	esp32HeapRegion?: string
+	esp32Upload?: boolean
 	bmkargs?: string[]
 	appargs?: string[]
 }
@@ -251,6 +256,10 @@ export class BmxBuildTaskProvider implements vscode.TaskProvider {
 		picoDefinition.target = 'pico'
 		picoDefinition.architecture = 'arm'
 		this.tasks.push( makeTask( picoDefinition ) )
+		const esp32Definition = makeTaskDefinition( 'ESP32', 'Build an ESP32 application', 'application', 'console' )
+		esp32Definition.target = 'esp32'
+		esp32Definition.architecture = 'xtensa'
+		this.tasks.push( makeTask( esp32Definition ) )
 
 		return this.tasks
 	}
@@ -344,10 +353,12 @@ export function makeTask( definition: BmxBuildTaskDefinition ): vscode.Task {
 		}
 
 		const isPico = resolvedDefinition.target == 'pico'
+		const isEsp32 = resolvedDefinition.target == 'esp32'
+		const isEmbedded = isPico || isEsp32
 
-		// Pico currently builds applications only. Treat this as an effective build
+		// Embedded targets currently build applications only. Treat this as an effective build
 		// constraint without rewriting a hand-authored task on disk.
-		const make = isPico ? 'application' : resolvedDefinition.make
+		const make = isEmbedded ? 'application' : resolvedDefinition.make
 
 		// Process args
 		switch ( make ) {
@@ -361,7 +372,7 @@ export function makeTask( definition: BmxBuildTaskDefinition ): vscode.Task {
 				args.push( 'makebootstrap' )
 				break
 			default:
-				if ( !isPico && !resolvedDefinition.legacy && resolvedDefinition.onlycompile ) {
+				if ( !isEmbedded && !resolvedDefinition.legacy && resolvedDefinition.onlycompile ) {
 					args.push( 'compile' )
 				} else {
 					args.push( 'makeapp' )
@@ -382,7 +393,7 @@ export function makeTask( definition: BmxBuildTaskDefinition ): vscode.Task {
 
 		if ( resolvedDefinition.fullcompile ) args.push( '-a' )
 
-		if ( !resolvedDefinition.legacy || isPico ) {
+		if ( !resolvedDefinition.legacy || isEmbedded ) {
 			// NG specific flags
 			if ( resolvedDefinition.verbose ) args.push( '-v' )
 
@@ -402,39 +413,40 @@ export function makeTask( definition: BmxBuildTaskDefinition ): vscode.Task {
 				args.push( '-g', resolvedDefinition.architecture )
 			}
 
-			if ( !isPico && resolvedDefinition.appstub ) args.push( '-b', resolvedDefinition.appstub )
+			if ( !isEmbedded && resolvedDefinition.appstub ) args.push( '-b', resolvedDefinition.appstub )
 
 			if ( resolvedDefinition.gdb ) args.push( '-gdb' )
 
-			if ( !isPico && resolvedDefinition.gprof ) args.push( '-gprof' )
+			if ( !isEmbedded && resolvedDefinition.gprof ) args.push( '-gprof' )
 
-			if ( !isPico && resolvedDefinition.universal ) args.push( '-i' )
+			if ( !isEmbedded && resolvedDefinition.universal ) args.push( '-i' )
 
-			if ( !isPico && resolvedDefinition.musl ) args.push( '-musl' )
+			if ( !isEmbedded && resolvedDefinition.musl ) args.push( '-musl' )
 
 			if ( resolvedDefinition.nostrictupgrade ) args.push( '-nostrictupgrade' )
+			if ( resolvedDefinition.noAutoSuperStrict ) args.push( '-nas' )
 
 			if ( resolvedDefinition.quiet ) args.push( '-q' )
 
-			if ( !isPico && resolvedDefinition.standalone ) args.push( '-standalone' )
+			if ( !isEmbedded && resolvedDefinition.standalone ) args.push( '-standalone' )
 
-			if ( !isPico && resolvedDefinition.static ) args.push( '-static' )
+			if ( !isEmbedded && resolvedDefinition.static ) args.push( '-static' )
 
-			if ( !isPico && resolvedDefinition.apptype == 'gui' && resolvedDefinition.hidpi ) args.push( '-hi' )
+			if ( !isEmbedded && resolvedDefinition.apptype == 'gui' && resolvedDefinition.hidpi ) args.push( '-hi' )
 
 			if ( resolvedDefinition.framework ) args.push( '-f', resolvedDefinition.framework )
 
-			if ( !isPico && resolvedDefinition.nomanifest ) args.push( '-nomanifest' )
+			if ( !isEmbedded && resolvedDefinition.nomanifest ) args.push( '-nomanifest' )
 
 			if ( resolvedDefinition.single ) args.push( '-single' )
 
-			if ( !isPico && resolvedDefinition.nodef ) args.push( '-nodef' )
+			if ( !isEmbedded && resolvedDefinition.nodef ) args.push( '-nodef' )
 
-			if ( !isPico && resolvedDefinition.nohead ) args.push( '-nohead' )
+			if ( !isEmbedded && resolvedDefinition.nohead ) args.push( '-nohead' )
 
-			if ( !isPico && resolvedDefinition.nopie ) args.push( '-no-pie' )
+			if ( !isEmbedded && resolvedDefinition.nopie ) args.push( '-no-pie' )
 
-			if ( !isPico && resolvedDefinition.upx ) args.push( '-upx' )
+			if ( !isEmbedded && resolvedDefinition.upx ) args.push( '-upx' )
 
 			if ( isPico ) {
 				if ( resolvedDefinition.picoBoard ) args.push( '-board', resolvedDefinition.picoBoard )
@@ -444,6 +456,12 @@ export function makeTask( definition: BmxBuildTaskDefinition ): vscode.Task {
 				if ( resolvedDefinition.picoFloatAbi ) args.push( '-float-abi', resolvedDefinition.picoFloatAbi )
 				if ( resolvedDefinition.picoUpload ) args.push( '-x' )
 			}
+			if ( isEsp32 ) {
+				if ( resolvedDefinition.esp32Board ) args.push( '-board', resolvedDefinition.esp32Board )
+				if ( resolvedDefinition.esp32Heap ) args.push( '-heap', resolvedDefinition.esp32Heap )
+				if ( resolvedDefinition.esp32HeapRegion ) args.push( '-heap-region', resolvedDefinition.esp32HeapRegion )
+				if ( resolvedDefinition.esp32Upload ) args.push( '-x' )
+			}
 
 			const conditionals = resolvedDefinition.conditionals
 			if ( conditionals ) {
@@ -452,13 +470,13 @@ export function makeTask( definition: BmxBuildTaskDefinition ): vscode.Task {
 			}
 		}
 
-		if ( isPico ) {
+		if ( isEmbedded ) {
 			args.push( '-t', 'console' )
 		} else if ( resolvedDefinition.apptype ) {
 			args.push( '-t', resolvedDefinition.apptype )
 		}
 
-		if ( !isPico && resolvedDefinition.threaded ) args.push( '-h' )
+		if ( !isEmbedded && resolvedDefinition.threaded ) args.push( '-h' )
 
 		if ( resolvedDefinition.bmkargs ) args = args.concat( resolvedDefinition.bmkargs )
 

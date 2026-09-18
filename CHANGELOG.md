@@ -1,3 +1,7 @@
+## Unreleased
+* Added ESP32 build options with an installed-profile board picker, architecture selection, heap settings and upload support
+* Added the `-nas` No Auto SuperStrict advanced build option
+
 ## 2.34.0
 * Added Raspberry Pi Pico build support (woollybah)
 * Picking Raspberry Pi Pico as the platform reveals its board, heap, storage, float ABI and picotool upload options
